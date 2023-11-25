@@ -1,62 +1,119 @@
 import React, { Component } from 'react';
-import Searchbar from './Searchbar/Searchbar';
-import ImageGallery from './ImageGallery/ImageGallery';
-import ImageGalleryItem from './ImageGalleryItem/ImageGalleryItem';
-import Loader from './Loader/Loader';
-// import { ToastContainer, toast } from 'react-toastify';
+import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-const axios = require('axios').default;
-const apiUrl =
-  'https://pixabay.com/api/?q=cat&page=1&key=40101841-4ad239ae4368ab22455fec4a5&image_type=photo&orientation=horizontal&per_page=12';
-// const apiKey = '40101841-4ad239ae4368ab22455fec4a5';
+
+import { FindImages } from './services/API';
+import { Searchbar } from './Searchbar/Searchbar';
+import { ImageGallery } from './ImageGallery/ImageGallery';
+import { LoadMoreBtn } from './Button/Button';
+import { Loader } from './Loader/Loader';
+import { Finish } from './Finish/Finish';
+
+import { AppContainer } from './App.styled';
+
+const KEY = '40101841-4ad239ae4368ab22455fec4a5';
 
 class App extends Component {
   state = {
-    results: [],
-    q: '',
+    error: false,
     page: 1,
-    totalImages: 0,
-    loading: false,
+    totalResults: null,
+    searchQuery: '',
+    images: [],
+    isLoading: false,
   };
 
-  componentDidMount() {
-    axios
-      .get(apiUrl, { params: this.state })
-      .then(response => {
-        console.log(response.data);
-      })
+  async componentDidUpdate(_, prevState) {
+    if (
+      this.state.page !== prevState.page ||
+      (this.state.searchQuery !== prevState.searchQuery &&
+        this.state.searchQuery !== '')
+    ) {
+      try {
+        this.setState({ isLoading: true });
+        const newUrl = `?q=${this.state.searchQuery}&page=${this.state.page}&key=${KEY}&image_type=photo&orientation=horizontal&per_page=12`;
+        const responseWithTotal = await FindImages(newUrl);
+        const totalResults = responseWithTotal.totalHits;
 
-      .catch(error => {
-        console.error('Error:', error);
-      });
+        const response = responseWithTotal.hits;
+
+        if (response.length === 0) {
+          toast.error('Nothing found for your request', { autoClose: 3000 });
+        }
+
+        const imagesData = response.map(
+          ({ id, tags, webformatURL, largeImageURL }) => {
+            return {
+              id,
+              tags,
+              webformatURL,
+              largeImageURL,
+            };
+          }
+        );
+
+        this.setState(prevState => {
+          return {
+            images: [...prevState.images, ...imagesData],
+            totalResults,
+          };
+        });
+      } catch (error) {
+        this.setState({ error: true });
+        console.log(error);
+      } finally {
+        this.setState({ isLoading: false });
+      }
+    }
   }
 
-  getQuery = formData => {
-    this.setState({ query: formData });
+  setSearchQuery = query => {
+    if (query.trim().length === 0) {
+      toast.warn('Sorry, search field if empty :(', { autoClose: 3000 });
+      this.setState({ images: [], page: 1, searchQuery: '' });
+      return;
+    }
+
+    if (query.trim().length > 0) {
+      this.setState({ images: [], page: 1, searchQuery: query });
+    }
+  };
+
+  pageIncrement = () => {
+    this.setState(prevState => {
+      return { page: prevState.page + 1 };
+    });
+  };
+
+  countTotalPages = totalResults => {
+    const totalPages = Math.ceil(totalResults / 12);
+    return totalPages;
+  };
+
+  positiveResponse = () => {
+    toast.success(`Hooray! We found ${this.state.totalResults} images.`, {
+      autoClose: 3000,
+    });
   };
 
   render() {
-    // const { data } = this.state;
     return (
-      <>
-        <Searchbar getQuery={this.getQuery} />
-        <Loader />
-        <ImageGallery />
-        <ImageGalleryItem />
-
-        {/* <ToastContainer
-          position="top-left"
-          autoClose={2000}
-          hideProgressBar={false}
-          newestOnTop={false}
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme="colored"
-        /> */}
-      </>
+      <AppContainer>
+        <Searchbar onSubmit={this.setSearchQuery} />
+        <ImageGallery images={this.state.images} />
+        {this.state.page === 1 &&
+          this.state.images.length > 0 &&
+          this.positiveResponse()}
+        {this.state.images.length > 0 &&
+          this.countTotalPages(this.state.totalResults) !== this.state.page && (
+            <LoadMoreBtn onClick={this.pageIncrement} />
+          )}
+        {this.state.isLoading && <Loader />}
+        <ToastContainer />
+        {this.state.page === this.countTotalPages(this.state.totalResults) && (
+          <Finish />
+        )}
+      </AppContainer>
     );
   }
 }
