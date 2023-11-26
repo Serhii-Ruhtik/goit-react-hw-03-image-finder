@@ -17,7 +17,7 @@ export function Searchbar({ onSubmit }) {
     <Formik
       initialValues={initialValues}
       onSubmit={(values, actions) => {
-        onSubmit(values.searchField);
+        onSubmit(values.searchField.trim());
         actions.setSubmitting(false);
         actions.resetForm();
       }}

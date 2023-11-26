@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import { FindImages } from './services/API';
+import { findImages } from './services/API';
 import { Searchbar } from './Searchbar/Searchbar';
 import { ImageGallery } from './ImageGallery/ImageGallery';
 import { LoadMoreBtn } from './Button/Button';
@@ -10,8 +10,6 @@ import { Loader } from './Loader/Loader';
 import { Finish } from './Finish/Finish';
 
 import { AppContainer } from './App.styled';
-
-const KEY = '40101841-4ad239ae4368ab22455fec4a5';
 
 class App extends Component {
   state = {
@@ -24,21 +22,22 @@ class App extends Component {
   };
 
   async componentDidUpdate(_, prevState) {
-    if (
-      this.state.page !== prevState.page ||
-      (this.state.searchQuery !== prevState.searchQuery &&
-        this.state.searchQuery !== '')
-    ) {
+    const { page, searchQuery } = this.state;
+    if (page !== prevState.page || searchQuery !== prevState.searchQuery) {
       try {
         this.setState({ isLoading: true });
-        const newUrl = `?q=${this.state.searchQuery}&page=${this.state.page}&key=${KEY}&image_type=photo&orientation=horizontal&per_page=12`;
-        const responseWithTotal = await FindImages(newUrl);
+        const responseWithTotal = await findImages(searchQuery, page);
         const totalResults = responseWithTotal.totalHits;
 
         const response = responseWithTotal.hits;
 
         if (response.length === 0) {
           toast.error('Nothing found for your request', { autoClose: 3000 });
+          return;
+        }
+
+        if (this.state.page === 1) {
+          this.positiveResponse();
         }
 
         const imagesData = response.map(
@@ -68,15 +67,12 @@ class App extends Component {
   }
 
   setSearchQuery = query => {
-    if (query.trim().length === 0) {
+    if (!query) {
       toast.warn('Sorry, search field if empty :(', { autoClose: 3000 });
-      this.setState({ images: [], page: 1, searchQuery: '' });
       return;
     }
 
-    if (query.trim().length > 0) {
-      this.setState({ images: [], page: 1, searchQuery: query });
-    }
+    this.setState({ images: [], page: 1, searchQuery: query });
   };
 
   pageIncrement = () => {
@@ -85,8 +81,8 @@ class App extends Component {
     });
   };
 
-  countTotalPages = totalResults => {
-    const totalPages = Math.ceil(totalResults / 12);
+  countTotalPages = () => {
+    const totalPages = Math.ceil(this.state.totalResults / 12);
     return totalPages;
   };
 
@@ -97,22 +93,18 @@ class App extends Component {
   };
 
   render() {
+    const { page, images, totalResults, isLoading } = this.state;
+    const totalPages = this.countTotalPages();
     return (
       <AppContainer>
         <Searchbar onSubmit={this.setSearchQuery} />
-        <ImageGallery images={this.state.images} />
-        {this.state.page === 1 &&
-          this.state.images.length > 0 &&
-          this.positiveResponse()}
-        {this.state.images.length > 0 &&
-          this.countTotalPages(this.state.totalResults) !== this.state.page && (
-            <LoadMoreBtn onClick={this.pageIncrement} />
-          )}
-        {this.state.isLoading && <Loader />}
-        <ToastContainer />
-        {this.state.page === this.countTotalPages(this.state.totalResults) && (
-          <Finish />
+        <ImageGallery images={images} />
+        {images.length > 0 && totalPages !== page && (
+          <LoadMoreBtn onClick={this.pageIncrement} />
         )}
+        {isLoading && <Loader />}
+        <ToastContainer />
+        {page === this.countTotalPages(totalResults) && <Finish />}
       </AppContainer>
     );
   }
